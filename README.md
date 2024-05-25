@@ -315,3 +315,205 @@
 
   </body>
 </html>
+
+
+
+# importing the modules
+import pandas as pd # use for data manipulations and analysis
+import numpy as np # use for multi-dimensional array and matrix
+import matplotlib.pyplot as plt # provides object oriented API
+import seaborn as sns # use for high-level interface for drawing attractive and statistical graphics
+# %matplotlib inline
+from sklearn.linear_model import LogisticRegression # algo use to predict good or bad
+from sklearn.naive_bayes import MultinomialNB # natural language processing(nlp) algo use to predict good or bad
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
+from nltk.tokenize import RegexpTokenizer # regression expression tokenizers use to split words from text
+from nltk.stem.snowball import SnowballStemmer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.pipeline import make_pipeline
+import time  # calculate time
+from PIL import Image
+from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator # creates words cloud
+from bs4 import BeautifulSoup
+from selenium import webdriver
+import networkx as nx
+import pickle
+import warnings   # ignores
+warnings.filterwarnings('ignore')
+
+
+def plot_wordcloud(text, mask=None, max_words=400, max_font_size=120, figure_size=(24.0, 16.0),
+                   title=None, title_size=40, image_color=False):
+    stopwords = set(STOPWORDS)
+    more_stopwords = {'com', 'http'}
+    stopwords = stopwords.union(more_stopwords)
+
+    wordcloud = WordCloud(background_color='white',
+                          stopwords=stopwords,
+                          max_words=max_words,
+                          max_font_size=max_font_size,
+                          random_state=42,
+                          mask=mask)
+    wordcloud.generate(text)
+
+    plt.figure(figsize=figure_size)
+    if image_color:
+        image_colors = ImageColorGenerator(mask);
+        plt.imshow(wordcloud.recolor(color_func=image_colors), interpolation="bilinear");
+        plt.title(title, fontdict={'size': title_size,
+                                   'verticalalignment': 'bottom'})
+    else:
+        plt.imshow(wordcloud);
+        plt.title(title, fontdict={'size': title_size, 'color': 'green',
+                                   'verticalalignment': 'bottom'})
+    plt.axis('off');
+    plt.tight_layout()
+
+
+data = pd.read_csv("phishing_site_urls.csv")
+data.columns = ['URL', 'Label']
+label_counts = pd.DataFrame(data.Label.value_counts())
+tokenizer = RegexpTokenizer(r'[A-Za-z]+')
+tokenizer.tokenize(data.URL[0])
+
+print('Getting words tokenized ...')
+t0 = time.perf_counter()
+data['text_tokenized'] = data.URL.map(lambda t: tokenizer.tokenize(t))
+t1 = time.perf_counter() - t0
+print('Time taken', t1, 'sec')
+
+stemmer = SnowballStemmer("english")
+print('Getting words stemmed ...')
+t0 = time.perf_counter()
+data['text_stemmed'] = data['text_tokenized'].map(lambda l: [stemmer.stem(word) for word in l])
+t1 = time.perf_counter() - t0
+print('Time taken', t1, 'sec')
+
+print('Getting joiningwords ...')
+t0 = time.perf_counter()
+data['text_sent'] = data['text_stemmed'].map(lambda l: ' '.join(l))
+t1 = time.perf_counter() - t0
+print('Time taken', t1, 'sec')
+
+print(data.text_sent)
+
+
+bad_sites = data[data.Label == 'bad']
+good_sites = data[data.Label == 'good']
+
+data1 = good_sites.text_sent
+data1.reset_index(drop=True, inplace=True)
+common_text = str(data1)
+# common_mask = np.array(Image.open('star.png'))
+plot_wordcloud(common_text, max_words=400, max_font_size=120,
+               title = 'Most common words use in good urls', title_size=15)
+data = bad_sites.text_sent
+data.reset_index(drop=True, inplace=True)
+common_text = str(data1)
+# common_mask = np.array(Image.open('comment.png'))
+plot_wordcloud(common_text, max_words=400, max_font_size=120,
+               title = 'Most common words use in bad urls', title_size=15)
+
+
+data = pd.read_csv("phishing_site_urls.csv")
+print(data.head())
+data.columns = ['URL', 'Label']
+label_counts = pd.DataFrame(data.Label.value_counts())
+tokenizer = RegexpTokenizer(r'[A-Za-z]+')
+tokenizer.tokenize(data.URL[0])
+
+print('Getting words tokenized ...')
+t0 = time.perf_counter()
+data['text_tokenized'] = data.URL.map(lambda t: tokenizer.tokenize(t))
+t1 = time.perf_counter() - t0
+print('Time taken', t1, 'sec')
+
+stemmer = SnowballStemmer("english")
+print('Getting words stemmed ...')
+t0 = time.perf_counter()
+data['text_stemmed'] = data['text_tokenized'].map(lambda l: [stemmer.stem(word) for word in l])
+t1 = time.perf_counter() - t0
+print('Time taken', t1, 'sec')
+
+print('Getting joiningwords ...')
+t0 = time.perf_counter()
+data['text_sent'] = data['text_stemmed'].map(lambda l: ' '.join(l))
+t1 = time.perf_counter() - t0
+print('Time taken', t1, 'sec')
+
+cv = CountVectorizer()
+feature = cv.fit_transform(data.text_sent)
+feature[:5].toarray()
+trainX, testX, trainY, testY = train_test_split(feature, data.Label)
+lr = LogisticRegression()
+lr.fit(trainX, trainY)
+lr.score(testX, testY)
+Scores_ml = {}
+Scores_ml['Logistic Regression'] = np.round(lr.score(testX,testY),2)
+print('Training Accuracy :',lr.score(trainX,trainY))
+print('Testing Accuracy :',lr.score(testX,testY))
+con_mat = pd.DataFrame(confusion_matrix(lr.predict(testX), testY),
+            columns = ['Predicted:Bad', 'Predicted:Good'],
+            index = ['Actual:Bad', 'Actual:Good'])
+
+
+print('\nCLASSIFICATION REPORT\n')
+print(classification_report(lr.predict(testX), testY,
+                            target_names =['Bad','Good']))
+
+print('\nCONFUSION MATRIX')
+plt.figure(figsize= (6,4))
+sns.heatmap(con_mat, annot = True,fmt='d',cmap="YlGnBu")
+
+mnb = MultinomialNB()
+mnb.fit(trainX,trainY)
+mnb.score(testX,testY)
+Scores_ml['MultinomialNB'] = np.round(mnb.score(testX,testY),2)
+print('Training Accuracy :',mnb.score(trainX,trainY))
+print('Testing Accuracy :',mnb.score(testX,testY))
+con_mat = pd.DataFrame(confusion_matrix(mnb.predict(testX), testY),
+            columns = ['Predicted:Bad', 'Predicted:Good'],
+            index = ['Actual:Bad', 'Actual:Good'])
+
+
+print('\nCLASSIFICATION REPORT\n')
+print(classification_report(mnb.predict(testX), testY,
+                            target_names =['Bad','Good']))
+
+print('\nCONFUSION MATRIX')
+plt.figure(figsize= (6,4))
+sns.heatmap(con_mat, annot = True,fmt='d',cmap="YlGnBu")
+acc = pd.DataFrame.from_dict(Scores_ml,orient = 'index',columns=['Accuracy'])
+sns.set_style('darkgrid')
+plt.bar(acc.index,acc.Accuracy, color=['orange', 'yellow'], width=0.6)
+pipeline_ls = make_pipeline(CountVectorizer(tokenizer = RegexpTokenizer(r'[A-Za-z]+').tokenize,stop_words='english'), LogisticRegression())
+trainX, testX, trainY, testY = train_test_split(data.URL, data.Label)
+pipeline_ls.fit(trainX,trainY)
+pipeline_ls.score(testX,testY)
+print('Training Accuracy :',pipeline_ls.score(trainX,trainY))
+print('Testing Accuracy :',pipeline_ls.score(testX,testY))
+con_mat = pd.DataFrame(confusion_matrix(pipeline_ls.predict(testX), testY),
+            columns = ['Predicted:Bad', 'Predicted:Good'],
+            index = ['Actual:Bad', 'Actual:Good'])
+
+
+print('\nCLASSIFICATION REPORT\n')
+print(classification_report(pipeline_ls.predict(testX), testY,
+                            target_names =['Bad','Good']))
+
+print('\nCONFUSION MATRIX')
+plt.figure(figsize= (6,4))
+sns.heatmap(con_mat, annot = True,fmt='d',cmap="YlGnBu")
+pickle.dump(pipeline_ls,open('phishing.pkl','wb'))
+loaded_model = pickle.load(open('phishing.pkl', 'rb'))
+result = loaded_model.score(testX,testY)
+print(result)
+loaded_model = pickle.load(open('phishing.pkl', 'rb'))
+result1 = loaded_model.predict(['yeniik.com.tr/wp-admin/js/login.alibaba.com/login.jsp.php'])
+result2 = loaded_model.predict(['youtube.com/'])
+print(result1)
+print("*"*30)
+print(result2)
+
